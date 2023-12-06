@@ -1,0 +1,943 @@
+% final project-MIAP
+% Amirreza Hatami pour
+% 97101507
+%###################################################################
+%% 1.1 section one
+% read all samples 
+clc; clear;
+
+% for i=2:20
+%     dstr=num2str(i);
+%     if i<10
+%     file=strcat("sample/S0",dstr,"/pat",dstr,".nii");
+%     file_label=strcat("sample/S0",dstr,"/pat",dstr,"_label.nii");
+%     pat{i}=niftiread(file);
+%     pat_label{i}=niftiread(file_label);
+%     else
+%     file=strcat("sample/S",dstr,"/pat",dstr,".nii");
+%     file_label=strcat("sample/S",dstr,"/pat",dstr,"_label.nii");
+%     pat{i}=niftiread(file);
+%     pat_label{i}=niftiread(file_label);   
+%     end
+%     
+%     
+% end
+ pat{1}=niftiread("data/S593/pat593.nii");
+ pat_label{1}=niftiread("data/S593/pat593_label.nii");  
+% 
+pat{2}=niftiread("data/S561/pat561.nii");
+pat_label{2}=niftiread("data/S561/pat561_label.nii");
+% 
+pat{3}=niftiread("data/S605/pat605.nii");
+pat_label{3}=niftiread("data/S605/pat605_label.nii");
+% 
+pat{4}=niftiread("data/S631/pat631.nii");
+pat_label{4}=niftiread("data/S631/pat631_label.nii");
+
+file_fixed="data/Healthy_sample/00_mask.nii";
+atlas=niftiread(file_fixed);
+%% 1.2 show some of data with imtool3D
+%if you want see data uncoment these line after run imtool3D.m in folder
+%imtool3D
+% refrence: https://www.mathworks.com/matlabcentral/fileexchange/40753-imtool3d
+
+
+% tool = imtool3D(pat{1});
+% tool.setMask(pat_label{1});
+% 
+%tool = imtool3D(pat{2});
+%tool.setMask(pat_label{2});
+% 
+% tool = imtool3D(pat{3});
+% tool.setMask(pat_label{3});
+% 
+% tool = imtool3D(pat{4});
+% tool.setMask(pat_label{4});
+%% 1.3 choose data you want and uncomment it:
+%path=pat_label{1};
+path=pat_label{2};
+%path=pat_label{3};
+%path=pat_label{4};
+fixed=atlas;
+%% 1.4 rotation - with new Data set We don't need to this section
+% output = pointcloud_downsample(pat_label{1},100);
+% figure
+% pcshow(output);
+% % Rotate Atlas 
+% atlas_rotate = imrotate3(atlas,90,[0 1 0]);
+% atlas_rotate = imrotate3(atlas_rotate,-90,[0 0 1]);
+% output_rotate = pointcloud_downsample(atlas_rotate,100);
+% figure
+% pcshow(output_rotate);
+
+
+%% 1.5 point cloud
+% show some of point cloud with diferrent number of Count
+
+%orginal 
+output_org = pointcloud_downsample(path,100);
+number_orginal=output_org.Count;
+
+% 10% of points 
+output_ten = pointcloud_downsample(path,10);
+number_ten=output_ten.Count;
+
+% 5% of points 
+output_five= pointcloud_downsample(path,5);
+number_five=output_five.Count;
+
+% 1% of points 
+output_one = pointcloud_downsample(path,1);
+number_one=output_one.Count;
+
+
+%pcshow(ptCloudA);
+% plot
+figure()
+subplot(2,2,1)
+pcshow(output_org);
+str = sprintf('orginal , num=%d', number_orginal);
+title(str,'interpreter','latex','FontName','Times New Roman');
+subplot(2,2,2)
+pcshow(output_ten);
+str = sprintf('with 10 percent output points , num=%d', number_ten);
+title(str,'interpreter','latex','FontName','Times New Roman');
+subplot(2,2,3)
+pcshow(output_five);
+str = sprintf('with 5 percent output points, num=%d', number_five);
+title(str,'interpreter','latex','FontName','Times New Roman');
+subplot(2,2,4)
+pcshow(output_one);
+str = sprintf('with 1 percent output points , num=%d', number_one);
+title(str,'interpreter','latex','FontName','Times New Roman');
+
+%#################################################################
+%% 2 section two
+% section 2.1 : It is mentioned in the report
+% section 2.2 : for ASD , DS & HD we write  ASD ,Dice_total &
+% Huasdorff_Distance Functions that calculate these measurment
+% section 2.3  :find volume : write function to calculate common volume :
+%               Find_common_volume(ptCloud)
+% section 2.4 : jacobian :  write function to calculate jacobian for
+%                           deformation field : jacobian(,)
+% ref:https://github.com/voxelmorph/voxelmorph/blob/b616bb2cba95ee35f2b60f6d590b969881cca591/voxelmorph/py/utils.py#L465
+% #################################################################
+ptCloudA=pointcloud_downsample(path,100);
+if path==pat_label{1} | path==pat_label{3}
+    ptCloudA.Intensity=ptCloudA.Intensity-1;
+end
+ptCloudB=pointcloud_downsample(fixed,100);
+
+moving_edge = edge3(path,'approxcanny',0.5);
+PtCloud_moving_edge=pointcloud_downsample(moving_edge,100);
+PtCloud_moving_edge=pointCloud(round(PtCloud_moving_edge.Location),'Intensity',PtCloud_moving_edge.Intensity);
+
+fixed_edge = edge3(fixed,'approxcanny',0.5);
+PtCloud_fixed_edge=pointcloud_downsample(fixed_edge,100);
+PtCloud_fixed_edge=pointCloud(round(PtCloud_fixed_edge.Location),'Intensity',PtCloud_fixed_edge.Intensity);
+fprintf('the measurement before registeration: \n')
+ASD_before_reg= ASD(PtCloud_moving_edge.Location,PtCloud_fixed_edge.Location);
+Dice_total_before_reg= Dice_total(ptCloudA,ptCloudB);
+Huasdorff_Distance_before_reg= Huasdorff_Distance(PtCloud_moving_edge.Location,PtCloud_fixed_edge.Location);
+common_volume_before_reg= Find_common_volume(ptCloudA);
+%% 3.1.1 section three point one 
+% first non-rigid transform
+% version 1: calculate tform only for PointClouds points and the interpolate it for 
+% all points
+% write two function for this section:
+%       1. nonrigid transform : this function apply non rigid transform
+%                               only for pointCloud 
+
+
+nonrigid_path= nonrigid_transform(path,fixed) ;
+%% 3.1.2  method one
+%      2.  nonrigid transform allpoints: this function apply non rigid transform
+%                                         only for all points with interpolation 
+
+
+fprintf('the measurement after registeration CPD NONRIGID: \n')
+[PtCloud_nonrigid_all,Ptcloud_edge_nonrigid] =  nonrigid_transform_allpoints(path,fixed);
+
+ptCloudB=pointcloud_downsample(fixed,100);
+ASD_after_NonRigid= ASD(PtCloud_fixed_edge.Location,Ptcloud_edge_nonrigid.Location);
+Dice_total_after_NonRigid= Dice_total(PtCloud_nonrigid_all,ptCloudB);
+Huasdorff_Distance_after_NonRigid= Huasdorff_Distance(PtCloud_fixed_edge.Location,Ptcloud_edge_nonrigid.Location);
+common_volume_after_NonRigid= Find_common_volume(PtCloud_nonrigid_all);
+jacobian_after_NonRigid= jacobian(path,fixed);
+
+%% 3.1.3 three point two: Rigid transform - method two
+%       3. rigid_transform : this function calculate tform for some points
+%                            and after apply it for all points
+
+fprintf('the measurement after registeration CPD RIGID: \n')
+[PtCloud_rigid_moving,PtCloud_rigid_moving_edge]  =  rigid_transform(path,fixed);
+
+ptCloudB=pointcloud_downsample(fixed,100);
+ASD_after_NonRigid= ASD(PtCloud_fixed_edge.Location,PtCloud_rigid_moving_edge.Location);
+Dice_total_after_Rigid= Dice_total(PtCloud_rigid_moving,ptCloudB);
+Huasdorff_Distance_after_Rigid= Huasdorff_Distance(PtCloud_fixed_edge.Location,PtCloud_rigid_moving_edge.Location);
+common_volume_after_Rigid= Find_common_volume(PtCloud_rigid_moving);
+%% 3.2 section three point two  - method three
+%  now try another methods:
+%  3.2.1. calculate register between each Corresponding Vertebrae with RIGID Transform and 
+%     at last find Transform function for all of the path
+
+fprintf('the measurement after registeration CPD RIGID between each Corresponding Vertebrae: \n')
+[rigid_transform_version1,rigid_transform_edge_version1] =  rigid_transform_separately(path,fixed);
+
+ptCloudB=pointcloud_downsample(fixed,100);
+ASD_after_Rigid_version1= ASD(PtCloud_fixed_edge.Location,rigid_transform_edge_version1.Location);
+Dice_total_after_Rigid_version1= Dice_total(rigid_transform_version1,ptCloudB);
+Huasdorff_Distance_after_Rigid_version1= Huasdorff_Distance(PtCloud_fixed_edge.Location,rigid_transform_edge_version1.Location);
+common_volume_after_Rigid_version1= Find_common_volume(rigid_transform_version1);
+%%   method four
+%  3.2.2. calculate register between each Corresponding Vertebrae with NONRIGID Transform and 
+%     at last find Displacement vector for all of the path
+fprintf('the measurement after registeration CPD NONRIGID between each Corresponding Vertebrae: \n')
+[nonrigid_transform_version2,nonrigid_transform_edge_version2] =  nonrigid_transform_separately(path,fixed);
+if path==pat_label{1} | path==pat_label{3}
+    nonrigid_transform_version2.Intensity=nonrigid_transform_version2.Intensity-1;
+end
+
+ASD_after_NONRigid_version2= ASD(PtCloud_fixed_edge.Location,nonrigid_transform_edge_version2.Location);
+Dice_total_after_NONRigid_version2= Dice_total(nonrigid_transform_version2,ptCloudB);
+Huasdorff_Distance_after_NONRigid_version2= Huasdorff_Distance(PtCloud_fixed_edge.Location,nonrigid_transform_edge_version2.Location);
+common_volume_after_NONRigid_version2= Find_common_volume(nonrigid_transform_version2);
+jacobian_after_NonRigid= jacobian(path,fixed);
+
+%% Functions
+function output = pointcloud_downsample(path,percent) 
+            %calculate pointcloud and downsample it 
+            %input:
+            %       path: input path
+            %       percent: =size pointcloud after downsample/size orginal in orginal case
+            % output:
+            %       downsampled point cloud
+            %points_location: is the location of point cloud
+            %points_value : is the intensity of point cloud
+            
+[x,y,z] = ind2sub(size(path),find(path));
+points_location=zeros(length(x),3);
+points_location(:,1)=x;
+points_location(:,2)=y;
+points_location(:,3)=z; 
+index=sub2ind(size(path),find(path));
+points_value=double(path(index));
+%ptCloud = pointCloud(points_location);
+ptCloud = pointCloud(points_location,'Intensity',points_value);
+
+org_count=ptCloud.Count;
+ds_count=org_count;
+gridStep = 0.01;
+if percent==100
+     output=ptCloud;
+else
+     while ds_count/org_count> (percent/100)
+     gridStep = 1.5*gridStep;
+     ptCloudA = pcdownsample(ptCloud,'gridAverage',gridStep);
+     ds_count=ptCloudA.Count;
+     end
+    output=ptCloudA;
+
+end
+
+
+end  
+function output = ASD(Groundtruth,Machinesegment) 
+            %calculate average surface distance (ASD)
+            %input:
+            %       Gruondtruth:        
+            % output:
+            %       calculate ASD for two inputs
+            
+[points_location_GT,~]=size(Groundtruth);
+[points_location_MS,~]=size(Machinesegment);
+sum_diff_BGT=0;
+for i=1:points_location_GT
+  diff=abs( Machinesegment-Groundtruth(i,:));
+  sum_diff_BGT_x= min(diff(:,1).^2+diff(:,2).^2+diff(:,3).^2,[],'all');
+  sum_diff_BGT=sum_diff_BGT+sqrt(sum_diff_BGT_x);
+end
+
+sum_diff_BMS=0;
+for i=1:points_location_MS
+   diff=abs( Groundtruth-Machinesegment(i,:));
+   sum_diff_BMS_x=  min(diff(:,1).^2+diff(:,2).^2+diff(:,3).^2,[],'all');
+   sum_diff_BMS=sum_diff_BMS+sqrt(sum_diff_BMS_x);
+end
+
+output=(sum_diff_BGT+sum_diff_BMS)/(points_location_GT+points_location_MS);
+            
+fprintf('the ASD = %d \n',output)
+end  
+function output = Dice_total(ptCloudA,ptCloudB) 
+         % calculate Dice measurement between two PointCloud
+         % input:
+         %       ptCloudA: pointCloud for fixed image   
+         %       ptCloudB: pointCloud for moving image   
+         % output:
+         %       Dice measurement
+%     L1=double(Groundtruth);
+%     L2=double(Machinesegment);
+%     similarity = dice(L1,L2);
+%     output=sum(similarity(20:24));
+    for j=20:25
+    Index_first = (ptCloudA.Intensity==j);
+    Point_location_first=(ptCloudA.Location(Index_first,:));
+    Index_second = (ptCloudB.Intensity==j);
+    Point_location_second=(ptCloudB.Location(Index_second,:));
+    sum=0;
+    for i=1:length(Point_location_second(:,3))
+      index=find(abs(Point_location_first(:,1)-Point_location_second(i,1))<0.5 & abs(Point_location_first(:,2)-Point_location_second(i,2))<0.5 & abs(Point_location_first(:,3)-Point_location_second(i,3))<0.5);
+      sum=sum+length(index);
+    end
+    dice(j-19)=2*sum/(length(Point_location_first)+(length(Point_location_second)));
+
+    end
+    output=(dice(1)+dice(2)+dice(3)+dice(4)+dice(5))/5;
+    fprintf('the total dice = %d \n',output)
+end
+function output = Huasdorff_Distance(Groundtruth,Machinesegment) 
+         % calculate Huasdorff Distance between sureface of two images
+         % input:
+         %       Groundtruth: fixed image (atlas)   
+         %       Machinesegment: moving image
+         % output:
+         %       Huasdorff Distance measurement
+
+[points_location_GT,~]=size(Groundtruth);
+[points_location_MS,~]=size(Machinesegment);
+
+diff_BGT=zeros(length(points_location_GT),1);
+for i=1:points_location_GT
+   diff=abs( Machinesegment-Groundtruth(i,:));
+   diff_BGT_x= min(diff(:,1).^2+diff(:,2).^2+diff(:,3).^2,[],'all');
+   diff_BGT(i)=sqrt(diff_BGT_x);
+end
+
+diff_BMS=zeros(length(points_location_GT),1);
+for i=1:points_location_MS
+   diff=abs( Groundtruth-Machinesegment(i,:));
+   diff_BMS_x=  min(diff(:,1).^2+diff(:,2).^2+diff(:,3).^2,[],'all');
+   diff_BMS(i)=sqrt(diff_BMS_x);
+end
+
+output=max(max(diff_BMS,[],'all'),max(diff_BGT,[],'all'));
+ fprintf('the Huasdorff_Distance = %d \n',output)           
+end
+function output = Find_common_volume(ptCloud) 
+         % calculate common volume between each Vertebrae in one image
+         % input:
+         %       ptCloud: Point Cloud of image 
+         % output:
+         %       number of common Vertebrae in one image
+output=0;
+for j=[20 21 22 23]
+Intensity_first = (ptCloud.Intensity==j);
+Point_location_first=(ptCloud.Location(Intensity_first,:));
+Intensity_second = (ptCloud.Intensity==j+1);
+Point_location_second=(ptCloud.Location(Intensity_second,:));
+sum=0;
+for i=1:length(Point_location_second(:,3))
+     index=find(abs(Point_location_first(:,1)-Point_location_second(i,1))<0.5 & abs(Point_location_first(:,2)-Point_location_second(i,2))<0.5 & abs(Point_location_first(:,3)-Point_location_second(i,3))<0.5);
+     sum=sum+length(index);
+end
+fprintf('the nember of common volume between %d-th Vertebrae & %d-th Vertebrae in path= %d ',j,j+1,sum)
+ fprintf('\n')
+%str=sprintf(' the common volume between')
+output=output+sum;
+end
+fprintf('the total common volume in path = %d \n',output/ptCloud.Count)
+end
+function output = jacobian(path,fixed) 
+            % this function calculate jacobian
+            %input:
+            %       path: moving image
+            %       fixed: fixed image
+            % output:
+            %       apply deformation field on moving image
+[x,y,z] = ind2sub(size(path),find(path));
+movingDownsampled=pointcloud_downsample(path,1);
+fixedDownsampled=pointcloud_downsample(fixed,1);
+tform = pcregistercpd(movingDownsampled,fixedDownsampled);
+
+points_location=zeros(length(x),3);
+points_location(:,1)=x;
+points_location(:,2)=y;
+points_location(:,3)=z;
+index=sub2ind(size(path),find(path));
+points_value=double(path(index));
+
+
+X = movingDownsampled.Location(:,1);
+Y = movingDownsampled.Location(:,2);
+Z = movingDownsampled.Location(:,3);
+v1 = tform(:,1);
+v2 = tform(:,2);
+v3 = tform(:,3);
+
+[m,n,p] = size(path);
+[Xq,Yq,Zq] = meshgrid(1:n,1:m,1:p);
+
+vq1 = griddata(X,Y,Z,v1,Xq,Yq,Zq,'linear');
+vq2 = griddata(X,Y,Z,v2,Xq,Yq,Zq,'linear');
+vq3 = griddata(X,Y,Z,v3,Xq,Yq,Zq,'linear');
+
+
+D4 = nan(size(path,1),size(path,2),size(path,3),3);
+D4(:,:,:,1) = vq1;
+D4(:,:,:,2) = vq2;
+D4(:,:,:,3) = vq3;
+
+
+r1 = 1:size(path,1);
+r2 = 1:size(path,2);
+r3 = 1:size(path,3);
+r4 = 1:3;
+grid_ls = ndgrid(r1,r2,r3,r4);
+
+size(grid_ls)
+size(D4)
+D_final = grid_ls + D4;
+
+[g1,g2,g3,g4] = gradient(D_final);
+
+dx = g1;
+dy = g2;
+dz = g3;
+
+Jdet0 = dx(:,:,:,1) .* (dy(:,:,:, 2) .* dz(:,:,:, 3) - dy(:,:,:, 3) .* dz(:,:,:, 2));
+Jdet1 = dx(:,:,:, 2) .* (dy(:,:,:, 1) .* dz(:,:,:, 3) - dy(:,:,:, 3) .* dz(:,:,:, 1));
+Jdet2 = dx(:,:,:, 3) .* (dy(:,:,:, 1) .* dz(:,:,:, 2) - dy(:,:,:, 2) .* dz(:,:,:, 1));
+J_determinant = Jdet0 - Jdet1 + Jdet2;
+[Jdet_x,Jdet_y,Jdet_z] = ind2sub(size(J_determinant),find(J_determinant < 0));
+
+Percent_Jdet = length(Jdet_x)/(size(path,1)*size(path,2)*size(path,3));
+
+         output=  Percent_Jdet;
+         fprintf('the jacobian = %d \n',output)
+            
+end
+function output = nonrigid_transform(path,fixed) 
+            % this function calculate nonrigid CPD transform for point
+            % Cloud and apply it only on point Cloud
+            %input:
+            %       path: moving image
+            %       fixed: fixed image
+            % output:
+            %       apply deformation field on moving image
+            
+movingDownsampled=pointcloud_downsample(path,1);
+fixedDownsampled=pointcloud_downsample(fixed,1);
+tform = pcregistercpd(movingDownsampled,fixedDownsampled);
+movingReg = pctransform(movingDownsampled,tform);
+output=movingReg;
+
+%plot
+figure
+subplot(2,3,1)
+pcshow(pointcloud_downsample(path,50));
+title('orginal Point clouds for path')
+
+subplot(2,3,2)
+pcshow(pointcloud_downsample(fixed,50));
+title('orginal Point clouds for Atlas')
+
+subplot(2,3,3)
+pcshow(movingDownsampled)
+hold on
+pcshow(fixedDownsampled)
+xlabel('X')
+xlabel('Y')
+zlabel('Z')
+title('PC before registration with Intensity')
+legend('\color{red} Moving point cloud','\color{red} Fixed point cloud')
+legend('Location','southoutside')
+
+
+subplot(2,3,4)
+pcshow(movingReg)
+hold on
+pcshow(fixedDownsampled)
+xlabel('X')
+xlabel('Y')
+zlabel('Z')
+title('PC after registration with Intensity')
+legend('\color{red} Moving point cloud','\color{red} Fixed point cloud')
+legend('Location','southoutside')
+
+
+
+subplot(2,3,5)
+pcshowpair(movingDownsampled,fixedDownsampled,'MarkerSize',50)
+xlabel('X')
+xlabel('Y')
+zlabel('Z')
+title('PC before registration without Intensity')
+legend('\color{red} Moving point cloud',' \color{red} Fixed point cloud')
+legend('Location','southoutside')
+
+subplot(2,3,6)
+pcshowpair(movingReg,fixedDownsampled,'MarkerSize',50)
+xlabel('X')
+xlabel('Y')
+zlabel('Z')
+title('PC after registration without Intensity')
+legend('\color{red} Moving point cloud','\color{red} Fixed point cloud')
+legend('Location','southoutside')
+
+
+
+end  
+function [output1,output2] =  nonrigid_transform_allpoints(path,fixed) 
+            % this function calculate NONRIGID CPD transform for point
+            % Cloud and interpolate it for all point and then apply it 
+            %input:
+            %       path: moving image
+            %       fixed: fixed image
+            % output:
+            %       apply deformation field on moving image
+            
+[x,y,z] = ind2sub(size(path),find(path));
+points_location=zeros(length(x),3);
+points_location(:,1)=x;
+points_location(:,2)=y;
+points_location(:,3)=z;
+index=sub2ind(size(path),find(path));
+points_value=double(path(index));
+
+%calculate edge 
+edge_pat1  =edge3(path,'approxcanny',0.6); 
+edge_fixed=edge3(fixed,'approxcanny',0.6);
+
+movingDownsampled_nonrigid=pointcloud_downsample(edge_pat1,5);
+fixedDownsampled_nonrigid=pointcloud_downsample(edge_fixed,5);
+tform = pcregistercpd(movingDownsampled_nonrigid,fixedDownsampled_nonrigid);
+
+[tx,index] = unique(movingDownsampled_nonrigid.Location(:,1),'first','legacy');
+px = tform(index,1);
+x_allpoints_nonrigid = points_location(:,1);
+x_interpolate_nonrigid=spline(tx,px,x_allpoints_nonrigid);
+
+[ty,index] = unique(movingDownsampled_nonrigid.Location(:,2),'first','legacy');
+py = tform(index,2);
+y_allpoints_nonrigid = points_location(:,2);
+y_interpolate_nonrigid=spline(ty,py,y_allpoints_nonrigid);
+
+[tz,index] = unique(movingDownsampled_nonrigid.Location(:,3),'first','legacy');
+pz = tform(index,3);
+z_allpoints_nonrigid = points_location(:,3);
+z_interpolate_nonrigid=spline(tz,pz,z_allpoints_nonrigid);
+
+tform_allpoints_nonrigid=zeros(length(points_location),3) ;
+tform_allpoints_nonrigid(:,1)=x_interpolate_nonrigid;
+tform_allpoints_nonrigid(:,2)=y_interpolate_nonrigid;
+tform_allpoints_nonrigid(:,3)=z_interpolate_nonrigid;
+
+final_location_nonrigid=points_location+tform_allpoints_nonrigid;
+
+ptCloud_moving_nonrigid = pointCloud(final_location_nonrigid,'Intensity',points_value);
+
+figure
+subplot(2,3,1)
+pcshow(pointcloud_downsample(path,100));
+title('orginal Point clouds for path')
+
+subplot(2,3,2)
+pcshow(pointcloud_downsample(fixed,100));
+title('orginal Point clouds for Atlas')
+
+subplot(2,3,3)
+pcshow(pointcloud_downsample(path,100));
+hold on
+pcshow(pointcloud_downsample(fixed,100));
+title('PC before  nonrigid registration ')
+legend('\color{red} Moving point cloud','\color{red} Fixed point cloud')
+legend('Location','southoutside')
+
+subplot(2,3,4)
+pcshow(ptCloud_moving_nonrigid);
+hold on
+pcshow(pointcloud_downsample(fixed,100));
+title('PC after nonrigid registration allpoints with Intensity')
+legend('\color{red} Moving point cloud','\color{red} Fixed point cloud')
+legend('Location','southoutside')
+
+subplot(2,3,6)
+pcshowpair(ptCloud_moving_nonrigid,pointcloud_downsample(fixed,100),'MarkerSize',50)
+title('PC after nonrigid registration allpoints without Intensity ')
+legend('\color{red} Moving point cloud','\color{red} Fixed point cloud')
+legend('Location','southoutside')
+
+ptCloud_moving_nonrigid = pointCloud(round(ptCloud_moving_nonrigid.Location),'Intensity',ptCloud_moving_nonrigid.Intensity);
+output1=ptCloud_moving_nonrigid;
+
+
+edge_pat1  =edge3(path,'approxcanny',0.6);
+[x,y,z] = ind2sub(size(edge_pat1),find(edge_pat1));
+points_location=zeros(length(x),3);
+points_location(:,1)=x;
+points_location(:,2)=y;
+points_location(:,3)=z;
+index=sub2ind(size(edge_pat1),find(edge_pat1));
+points_value=double(edge_pat1(index));
+
+
+[tx,index] = unique(movingDownsampled_nonrigid.Location(:,1),'first','legacy');
+px = tform(index,1);
+x_allpoints_nonrigid = points_location(:,1);
+x_interpolate_nonrigid=spline(tx,px,x_allpoints_nonrigid);
+
+[ty,index] = unique(movingDownsampled_nonrigid.Location(:,2),'first','legacy');
+py = tform(index,2);
+y_allpoints_nonrigid = points_location(:,2);
+y_interpolate_nonrigid=spline(ty,py,y_allpoints_nonrigid);
+
+[tz,index] = unique(movingDownsampled_nonrigid.Location(:,3),'first','legacy');
+pz = tform(index,3);
+z_allpoints_nonrigid = points_location(:,3);
+z_interpolate_nonrigid=spline(tz,pz,z_allpoints_nonrigid);
+
+tform_allpoints_nonrigid=zeros(length(points_location),3) ;
+tform_allpoints_nonrigid(:,1)=x_interpolate_nonrigid;
+tform_allpoints_nonrigid(:,2)=y_interpolate_nonrigid;
+tform_allpoints_nonrigid(:,3)=z_interpolate_nonrigid;
+
+final_location_edge=points_location+tform_allpoints_nonrigid;
+
+moving_rigid_edge = pointCloud(final_location_edge,'Intensity',points_value);
+
+output2=moving_rigid_edge;
+
+ end
+function [output1,output2]  =  rigid_transform(path,fixed)
+            % this function calculate RIGID CPD transform for point
+            % Cloud and interpolate it for all point and then apply it 
+            %input:
+            %       path: moving image
+            %       fixed: fixed image
+            % output:
+            %       apply deformation field on moving image
+            
+ PtCloud_fixed=pointcloud_downsample(fixed,100);
+edge_path =edge3(path,'approxcanny',0.5); 
+edge_fixed=edge3(fixed,'approxcanny',0.5);
+
+movingDownsampled_rigid=pointcloud_downsample(edge_path,1);
+fixedDownsampled_rigid=pointcloud_downsample(edge_fixed,1);
+
+tform_rigid = pcregistercpd(movingDownsampled_rigid,fixedDownsampled_rigid,'Transform','Rigid');
+
+
+%apply rigid tranform to all points
+PtCloud_path_rigid=pointcloud_downsample(path,100);
+moving_rigid=pctransform(PtCloud_path_rigid,tform_rigid);
+moving_rigid_edge=pctransform(pointcloud_downsample(edge_path,100),tform_rigid);
+
+ptCloud_rigid=moving_rigid;
+gridStep = 1;
+ptCloud_rigid_downsample = pcdownsample(ptCloud_rigid,'gridAverage',gridStep);
+%plot
+figure
+subplot(2,3,1)
+pcshow(pointcloud_downsample(path,100));
+title('orginal PC for path')
+
+subplot(2,3,2)
+pcshow(PtCloud_fixed);
+title('orginal PC for Atlas')
+
+subplot(2,3,3)
+pcshowpair(movingDownsampled_rigid,fixedDownsampled_rigid,'MarkerSize',50)
+title('PC before registration with 1% PC')
+legend(' \color{red} Moving point cloud','\color{red} Fixed point cloud')
+legend('Location','southoutside')
+
+
+subplot(2,3,4)
+pcshow(ptCloud_rigid_downsample)
+hold on
+pcshow(PtCloud_fixed)
+legend('Location','southoutside')
+legend(' \color{red} Moving point cloud','\color{red} Fixed point cloud')
+title('PC after rigid registration')
+
+subplot(2,3,5)
+gridStep = 15;
+ptCloud_rigid_downsample1 = pcdownsample(ptCloud_rigid,'gridAverage',gridStep);
+pcshowpair(ptCloud_rigid_downsample1,pointcloud_downsample(fixed,1),'MarkerSize',50)
+legend('Location','southoutside')
+legend(' \color{red} Moving point cloud','\color{red} Fixed point cloud')
+title('PC after Rigid registration with 1% PC')
+
+subplot(2,3,6)
+pcshowpair(ptCloud_rigid_downsample,pointcloud_downsample(fixed,100),'MarkerSize',50)
+legend('Location','southoutside')
+legend(' \color{red} Moving point cloud','\color{red} Fixed point cloud')
+title('PC after rigid registration')
+
+moving_rigid = pointCloud(round(moving_rigid.Location),'Intensity',moving_rigid.Intensity);
+moving_rigid_edge=pointCloud(round(moving_rigid_edge.Location),'Intensity',moving_rigid_edge.Intensity);
+output1=moving_rigid;
+output2=moving_rigid_edge;
+
+end
+function [output1,output2] =  rigid_transform_separately(path,fixed)
+            % this function calculate RIGID CPD transform for point
+            % Cloud of each Vertebrae and then apply average tform to allpoints 
+            %input:
+            %       path: moving image
+            %       fixed: fixed image
+            % output:
+            %       apply deformation field on moving image
+%path with label 20
+L1 = double(path==20);
+Surface_L1 = edge3(L1,'approxcanny',0.5);
+L2 = double(fixed==20);
+Surface_L2 = edge3(L2,'approxcanny',0.5);
+ptCloud_L_fixed_downsampled=pointcloud_downsample(Surface_L2,10);
+ptCloud_L_downsampled=pointcloud_downsample(Surface_L1,10);
+tform_Rigid_L20 = pcregistercpd(ptCloud_L_downsampled,ptCloud_L_fixed_downsampled,'Transform','Rigid');
+movingReg = pctransform(ptCloud_L_downsampled,tform_Rigid_L20);
+figure
+subplot(2,4,1) 
+pcshowpair(movingReg,ptCloud_L_fixed_downsampled,'MarkerSize',50)
+title('Point clouds after RIGID reg for label 20')
+
+%path with label 21
+L1 = double(path==21);
+Surface_L1 = edge3(L1,'approxcanny',0.5);
+L2 = double(fixed==21);
+Surface_L2 = edge3(L2,'approxcanny',0.5);
+ptCloud_L_fixed_downsampled=pointcloud_downsample(Surface_L2,10);
+ptCloud_L_downsampled=pointcloud_downsample(Surface_L1,10); 
+tform_Rigid_L21 = pcregistercpd(ptCloud_L_downsampled,ptCloud_L_fixed_downsampled,'Transform','Rigid');
+movingReg = pctransform(ptCloud_L_downsampled,tform_Rigid_L21);
+subplot(2,4,2) 
+pcshowpair(movingReg,ptCloud_L_fixed_downsampled,'MarkerSize',50)
+title('Point clouds after RIGID reg for label 21')
+
+%path with label 22
+L1 = double(path==22);
+Surface_L1 = edge3(L1,'approxcanny',0.5);
+L2 = double(fixed==22);
+Surface_L2 = edge3(L2,'approxcanny',0.5);
+ptCloud_L_fixed_downsampled=pointcloud_downsample(Surface_L2,10);
+ptCloud_L_downsampled=pointcloud_downsample(Surface_L1,10); 
+tform_Rigid_L22 = pcregistercpd(ptCloud_L_downsampled,ptCloud_L_fixed_downsampled,'Transform','Rigid');
+movingReg = pctransform(ptCloud_L_downsampled,tform_Rigid_L22);
+subplot(2,4,3) 
+pcshowpair(movingReg,ptCloud_L_fixed_downsampled,'MarkerSize',50)
+title('Point clouds after RIGID reg for label 22')
+
+%path with label 23
+L1 = double(path==23);
+Surface_L1 = edge3(L1,'approxcanny',0.5);
+L2 = double(fixed==23);
+Surface_L2 = edge3(L2,'approxcanny',0.5);
+ptCloud_L_fixed_downsampled=pointcloud_downsample(Surface_L2,10);
+ptCloud_L_downsampled=pointcloud_downsample(Surface_L1,10);
+tform_Rigid_L23 = pcregistercpd(ptCloud_L_downsampled,ptCloud_L_fixed_downsampled,'Transform','Rigid');
+movingReg = pctransform(ptCloud_L_downsampled,tform_Rigid_L23);
+subplot(2,4,4) 
+pcshowpair(movingReg,ptCloud_L_fixed_downsampled,'MarkerSize',50)
+title('Point clouds after RIGID reg for label 23')
+
+%path with label 24
+L1 = double(path==24);
+Surface_L1 = edge3(L1,'approxcanny',0.5);
+L2 = double(fixed==24);
+Surface_L2 = edge3(L2,'approxcanny',0.5);
+ptCloud_L_fixed_downsampled=pointcloud_downsample(Surface_L2,10);
+ptCloud_L_downsampled=pointcloud_downsample(Surface_L1,10);
+tform_Rigid_L24 = pcregistercpd(ptCloud_L_downsampled,ptCloud_L_fixed_downsampled,'Transform','Rigid');
+movingReg = pctransform(ptCloud_L_downsampled,tform_Rigid_L24);
+subplot(2,4,5) 
+pcshowpair(movingReg,ptCloud_L_fixed_downsampled,'MarkerSize',50)
+title('Point clouds after RIGID reg for label 24')
+
+
+movingDownsampled =pointcloud_downsample(path,100);
+fixedDownsampled=pointcloud_downsample(fixed,100);
+tform_Rigid_Total = (1/5)*(tform_Rigid_L20.T+tform_Rigid_L21.T+tform_Rigid_L22.T+tform_Rigid_L23.T+tform_Rigid_L24.T);
+tform_Rigid_Total = affine3d(tform_Rigid_Total);
+movingReg = pctransform(movingDownsampled,tform_Rigid_Total);
+edge_path =edge3(path,'approxcanny',0.5); 
+moving_rigid_edge=pctransform(pointcloud_downsample(edge_path,100),tform_Rigid_Total);
+moving_rigid_edge=pointCloud(round(moving_rigid_edge.Location),'Intensity',moving_rigid_edge.Intensity);
+
+subplot(2,4,6)
+pcshowpair(movingDownsampled,fixedDownsampled,'MarkerSize',50)
+title('Point clouds before RIGID reg')
+subplot(2,4,7)
+pcshowpair(movingReg,fixedDownsampled,'MarkerSize',50)
+title('Point clouds after RIGID reg for all points')
+subplot(2,4,8) 
+pcshow(fixedDownsampled)
+hold on
+pcshow(movingReg)
+title('after RIGID reg for all points with intensity')
+movingReg = pointCloud(round(movingReg.Location),'Intensity',movingReg.Intensity);
+output1=movingReg;
+output2=moving_rigid_edge;
+end
+function [output1,output2] =  nonrigid_transform_separately(path,fixed)
+            % this function calculate NONRIGID CPD transform for point
+            % Cloud of each Vertebrae and then apply average tform to allpoints 
+            %input:
+            %       path: moving image
+            %       fixed: fixed image
+            % output:
+            %       apply deformation field on moving image
+L1 = double(path==20);
+Surface_L1 = edge3(L1,'approxcanny',0.5);
+L2 = double(fixed==20);
+Surface_L2 = edge3(L2,'approxcanny',0.5);
+ptCloud_L_fixed_downsampled=pointcloud_downsample(Surface_L2,10);
+ptCloud_L_downsampled=pointcloud_downsample(Surface_L1,10);
+movingDownsampled = ptCloud_L_downsampled;
+fixedDownsampled = ptCloud_L_fixed_downsampled;  
+tform_nonRigid_L20 = pcregistercpd(ptCloud_L_downsampled,ptCloud_L_fixed_downsampled);
+movingReg_L20 = pctransform(ptCloud_L_downsampled,tform_nonRigid_L20);
+figure
+subplot(2,4,1) 
+pcshowpair(movingReg_L20,ptCloud_L_fixed_downsampled,'MarkerSize',50)
+title('Point clouds after NonRigid reg for ,20')
+%path with label 21
+L1 = double(path==21);
+Surface_L1 = edge3(L1,'approxcanny',0.5);
+L2 = double(fixed==21);
+Surface_L2 = edge3(L2,'approxcanny',0.5);
+ptCloud_L_fixed_downsampled=pointcloud_downsample(Surface_L2,10);
+ptCloud_L_downsampled=pointcloud_downsample(Surface_L1,10);
+movingDownsampled = ptCloud_L_downsampled;
+fixedDownsampled = ptCloud_L_fixed_downsampled;  
+tform_nonRigid_L21 = pcregistercpd(ptCloud_L_downsampled,ptCloud_L_fixed_downsampled);
+movingReg_L21 = pctransform(ptCloud_L_downsampled,tform_nonRigid_L21);
+subplot(2,4,2) 
+pcshowpair(movingReg_L21,ptCloud_L_fixed_downsampled,'MarkerSize',50)
+title('Point clouds after NonRigid reg ,label 21')
+%path with label 22
+L1 = double(path==22);
+Surface_L1 = edge3(L1,'approxcanny',0.5);
+L2 = double(fixed==22);
+Surface_L2 = edge3(L2,'approxcanny',0.5);
+ptCloud_L_fixed_downsampled=pointcloud_downsample(Surface_L2,10);
+ptCloud_L_downsampled=pointcloud_downsample(Surface_L1,10);
+movingDownsampled = ptCloud_L_downsampled;
+fixedDownsampled = ptCloud_L_fixed_downsampled;  
+tform_nonRigid_L22 = pcregistercpd(ptCloud_L_downsampled,ptCloud_L_fixed_downsampled);
+movingReg_L22 = pctransform(ptCloud_L_downsampled,tform_nonRigid_L22);
+subplot(2,4,3) 
+pcshowpair(movingReg_L22,ptCloud_L_fixed_downsampled,'MarkerSize',50)
+title('Point clouds after NonRigid reg,label 22')
+%path with label 23
+L1 = double(path==23);
+Surface_L1 = edge3(L1,'approxcanny',0.5);
+L2 = double(fixed==23);
+Surface_L2 = edge3(L2,'approxcanny',0.5);
+ptCloud_L_fixed_downsampled=pointcloud_downsample(Surface_L2,10);
+ptCloud_L_downsampled=pointcloud_downsample(Surface_L1,10);
+movingDownsampled = ptCloud_L_downsampled;
+fixedDownsampled = ptCloud_L_fixed_downsampled;  
+tform_nonRigid_L23 = pcregistercpd(ptCloud_L_downsampled,ptCloud_L_fixed_downsampled);
+movingReg_L23 = pctransform(ptCloud_L_downsampled,tform_nonRigid_L23);
+subplot(2,4,4) 
+pcshowpair(movingReg_L23,ptCloud_L_fixed_downsampled,'MarkerSize',50)
+title('Point clouds after NonRigid reg ,label 23')
+%path with label 24
+L1 = double(path==24);
+Surface_L1 = edge3(L1,'approxcanny',0.5);
+L2 = double(fixed==24);
+Surface_L2 = edge3(L2,'approxcanny',0.5);
+ptCloud_L_fixed_downsampled=pointcloud_downsample(Surface_L2,10);
+ptCloud_L_downsampled=pointcloud_downsample(Surface_L1,10);
+movingDownsampled = ptCloud_L_downsampled;
+fixedDownsampled = ptCloud_L_fixed_downsampled;  
+tform_nonRigid_L24 = pcregistercpd(ptCloud_L_downsampled,ptCloud_L_fixed_downsampled);
+movingReg_L24 = pctransform(ptCloud_L_downsampled,tform_nonRigid_L24);
+subplot(2,4,5) 
+pcshowpair(movingReg_L24,ptCloud_L_fixed_downsampled,'MarkerSize',50)
+title('Point clouds after NonRigid reg ,label 24')
+
+movingReg_Locations_nonrigid_selectedPoint = vertcat(movingReg_L20.Location,movingReg_L21.Location,movingReg_L22.Location,movingReg_L23.Location,movingReg_L24.Location);
+tform_NonRigid_selectedPoint = vertcat(tform_nonRigid_L20,tform_nonRigid_L21,tform_nonRigid_L22,tform_nonRigid_L23,tform_nonRigid_L24);
+
+[x,y,z] = ind2sub(size(path),find(path));
+points_location=zeros(length(x),3);
+points_location(:,1)=x;
+points_location(:,2)=y;
+points_location(:,3)=z;
+index=sub2ind(size(path),find(path));
+points_value=double(path(index));
+
+X = movingReg_Locations_nonrigid_selectedPoint(:,1);
+Y = movingReg_Locations_nonrigid_selectedPoint(:,2);
+Z = movingReg_Locations_nonrigid_selectedPoint(:,3);
+v1 = tform_NonRigid_selectedPoint(:,1);
+v2 = tform_NonRigid_selectedPoint(:,2);
+v3 = tform_NonRigid_selectedPoint(:,3);
+
+xq = points_location(:,1);
+yq = points_location(:,2);
+zq = points_location(:,3);
+
+vq1 = griddata(X,Y,Z,v1,xq,yq,zq,'nearest');
+vq2 = griddata(X,Y,Z,v2,xq,yq,zq,'nearest');
+vq3 = griddata(X,Y,Z,v3,xq,yq,zq,'nearest');
+
+
+tform_allpoints_nonrigid=zeros(length(points_location),3) ;
+tform_allpoints_nonrigid(:,1)=vq1;
+tform_allpoints_nonrigid(:,2)=vq2;
+tform_allpoints_nonrigid(:,3)=vq3;
+transformed_nonRigid_allpoints_final = points_location +tform_allpoints_nonrigid;
+
+nonRigid_pointcloud = pointCloud(transformed_nonRigid_allpoints_final,'Intensity',points_value);
+ptCloud_fixed=pointcloud_downsample(fixed,100);
+ptCloud=pointcloud_downsample(path,100);
+
+subplot(2,4,6) 
+pcshowpair(ptCloud_fixed,ptCloud,'MarkerSize',50)
+title('Point clouds before NonRigid register')
+
+subplot(2,4,7) 
+pcshowpair(ptCloud_fixed,nonRigid_pointcloud,'MarkerSize',50)
+title('Point clouds after NonRigid register')
+
+subplot(2,4,8) 
+pcshow(nonRigid_pointcloud);
+hold on 
+pcshow(ptCloud_fixed);
+title('Point clouds after NonRigid register')
+nonRigid_pointcloud = pointCloud(round(nonRigid_pointcloud.Location),'Intensity',nonRigid_pointcloud.Intensity);
+
+output1=nonRigid_pointcloud;
+edge_pat1  =edge3(path,'approxcanny',0.6);
+[x,y,z] = ind2sub(size(edge_pat1),find(edge_pat1));
+points_location=zeros(length(x),3);
+points_location(:,1)=x;
+points_location(:,2)=y;
+points_location(:,3)=z;
+index=sub2ind(size(edge_pat1),find(edge_pat1));
+points_value=double(edge_pat1(index));
+X = movingReg_Locations_nonrigid_selectedPoint(:,1);
+Y = movingReg_Locations_nonrigid_selectedPoint(:,2);
+Z = movingReg_Locations_nonrigid_selectedPoint(:,3);
+v1 = tform_NonRigid_selectedPoint(:,1);
+v2 = tform_NonRigid_selectedPoint(:,2);
+v3 = tform_NonRigid_selectedPoint(:,3);
+xq = points_location(:,1);
+yq = points_location(:,2);
+zq = points_location(:,3);
+vq1 = griddata(X,Y,Z,v1,xq,yq,zq,'nearest');
+vq2 = griddata(X,Y,Z,v2,xq,yq,zq,'nearest');
+vq3 = griddata(X,Y,Z,v3,xq,yq,zq,'nearest');
+tform_allpoints_nonrigid=zeros(length(points_location),3) ;
+tform_allpoints_nonrigid(:,1)=vq1;
+tform_allpoints_nonrigid(:,2)=vq2;
+tform_allpoints_nonrigid(:,3)=vq3;
+transformed_nonRigid_allpoints_final = points_location +tform_allpoints_nonrigid;
+nonRigid_pointcloud_edge = pointCloud(transformed_nonRigid_allpoints_final,'Intensity',points_value);
+output2=nonRigid_pointcloud_edge;
+end
